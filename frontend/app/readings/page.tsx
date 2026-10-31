@@ -1,325 +1,102 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/sidebar";
-import {
-  Activity,
-  Search,
-  Download,
-  Clock,
-  Radio,
-  Filter
-} from "lucide-react";
-
-const demoReadings = [
-  { id: "OBS-1024", station: "RM-024", location: "Nairobi", value: 0.18, time: "2026-10-31 02:10", status: "Review required" },
-  { id: "OBS-1023", station: "RM-018", location: "Mombasa", value: 0.12, time: "2026-10-31 02:05", status: "Normal demo reading" },
-  { id: "OBS-1022", station: "RM-031", location: "Kisumu", value: 0.14, time: "2026-10-31 02:02", status: "Normal demo reading" },
-  { id: "OBS-1021", station: "RM-009", location: "Nakuru", value: 0.11, time: "2026-10-31 01:58", status: "Normal demo reading" },
-  { id: "OBS-1020", station: "RM-042", location: "Garissa", value: null, time: "2026-10-31 01:45", status: "No recent data" },
-  { id: "OBS-1019", station: "RM-024", location: "Nairobi", value: 0.13, time: "2026-10-31 01:40", status: "Normal demo reading" },
-  { id: "OBS-1018", station: "RM-018", location: "Mombasa", value: 0.12, time: "2026-10-31 01:35", status: "Normal demo reading" },
-  { id: "OBS-1017", station: "RM-031", location: "Kisumu", value: 0.15, time: "2026-10-31 01:30", status: "Normal demo reading" }
-];
+import { Activity, Clock, Download, Filter, Radio, Search } from "lucide-react";
+import { api, displayTime, type Reading } from "@/lib/api";
 
 export default function ReadingsPage() {
+  const [readings, setReadings] = useState<Reading[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [stationFilter, setStationFilter] = useState("All");
+  const [error, setError] = useState("");
 
-  const filteredReadings = useMemo(() => {
-    return demoReadings.filter((reading) => {
-      const matchesSearch = [
-        reading.id,
-        reading.station,
-        reading.location
-      ].some((value) =>
-        value.toLowerCase().includes(search.toLowerCase())
-      );
+  useEffect(() => {
+    api<Reading[]>("/readings").then(setReadings).catch((reason: Error) => setError(reason.message));
+  }, []);
 
-      const matchesStatus =
-        statusFilter === "All" || reading.status === statusFilter;
+  const filtered = useMemo(() => readings.filter((reading) => {
+    const matchesSearch = `${reading.id} ${reading.station} ${reading.location}`.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch &&
+      (statusFilter === "All" || reading.status === statusFilter) &&
+      (stationFilter === "All" || reading.station === stationFilter);
+  }), [readings, search, statusFilter, stationFilter]);
 
-      const matchesStation =
-        stationFilter === "All" || reading.station === stationFilter;
-
-      return matchesSearch && matchesStatus && matchesStation;
-    });
-  }, [search, statusFilter, stationFilter]);
-
-  const exportCSV = () => {
-    const headers = ["Observation ID", "Station", "Location", "Reading (uSv/h)", "Timestamp", "Status"];
-
-    const rows = filteredReadings.map((reading) => [
-      reading.id,
-      reading.station,
-      reading.location,
-      reading.value ?? "Unavailable",
-      reading.time,
-      reading.status
-    ]);
-
-    const csv = [headers, ...rows]
-      .map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+  function exportCSV() {
+    const rows = [
+      ["Observation ID", "Station", "Location", "Reading (uSv/h)", "Timestamp", "Status"],
+      ...filtered.map((item) => [item.id, item.station, item.location, item.value ?? "Unavailable", item.time, item.status]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
-
-    link.href = url;
-    link.download = "radmap-readings-demo.csv";
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    link.download = "radmap-readings.csv";
     link.click();
+    URL.revokeObjectURL(link.href);
+  }
 
-    URL.revokeObjectURL(url);
-  };
-
-  const reviewCount = demoReadings.filter(
-    (reading) => reading.status === "Review required"
-  ).length;
-
-  const availableCount = demoReadings.filter(
-    (reading) => reading.value !== null
-  ).length;
+  const available = readings.filter((item) => item.value !== null).length;
+  const review = readings.filter((item) => item.status === "Review required").length;
+  const stations = [...new Set(readings.map((item) => item.station))];
 
   return (
     <div className="dashboard">
       <Sidebar />
-
       <main className="main">
         <header className="topbar">
-          <div>
-            <h1>Station Readings</h1>
-            <p className="subtitle">
-              Search, filter and review environmental observations.
-            </p>
-          </div>
-
-          <div className="status">
-            <span>●</span> DEMO DATA
-          </div>
+          <div><h1>Station Readings</h1><p className="subtitle">Search, filter and review environmental observations.</p></div>
+          <div className="status"><span>●</span> BACKEND DATA</div>
         </header>
-
+        {error && <p role="alert" className="error-message">{error}</p>}
         <section className="stats">
-          <div className="panel">
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="stat-label">Total Observations</span>
-              <Activity size={19} color="#39e0d0" />
-            </div>
-            <div className="stat-value">{demoReadings.length}</div>
-            <div className="stat-note">Illustrative records</div>
-          </div>
-
-          <div className="panel">
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="stat-label">Available Readings</span>
-              <Radio size={19} color="#39e0d0" />
-            </div>
-            <div className="stat-value">{availableCount}</div>
-            <div className="stat-note">With recorded values</div>
-          </div>
-
-          <div className="panel">
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="stat-label">Review Required</span>
-              <Filter size={19} color="#ffb454" />
-            </div>
-            <div className="stat-value">{reviewCount}</div>
-            <div className="stat-note">Requires further investigation</div>
-          </div>
+          {[
+            { label: "Total Observations", value: readings.length, icon: Activity },
+            { label: "Available Readings", value: available, icon: Radio },
+            { label: "Review Required", value: review, icon: Filter },
+          ].map((stat) => {
+            const Icon = stat.icon;
+            return <div className="panel" key={stat.label}><div style={{ display: "flex", justifyContent: "space-between" }}><span className="stat-label">{stat.label}</span><Icon size={19} color="#39e0d0" /></div><div className="stat-value">{stat.value}</div><div className="stat-note">Database observations</div></div>;
+          })}
         </section>
-
         <section className="panel" style={{ marginTop: 18 }}>
-          <div>
-            <h2>Observation Records</h2>
-            <p className="panel-description">
-              Browse the available demonstration observations.
-            </p>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div><h2>Observation Records</h2><p className="panel-description">Browse and export stored observations.</p></div>
+            <button type="button" className="primary-button" onClick={exportCSV}><Download size={16} />Export CSV</button>
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              marginTop: 22,
-              marginBottom: 20
-            }}
-          >
-            <div style={{ flex: "2 1 220px", position: "relative" }}>
-              <Search
-                size={17}
-                color="#8492a8"
-                style={{
-                  position: "absolute",
-                  left: 12,
-                  top: 13
-                }}
-              />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search observation, station or location..."
-                style={{
-                  width: "100%",
-                  padding: "12px 12px 12px 38px",
-                  background: "#070b14",
-                  border: "1px solid #243247",
-                  borderRadius: 8,
-                  color: "#e7edf7",
-                  outline: "none"
-                }}
-              />
-            </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              style={{
-                flex: "1 1 170px",
-                padding: 12,
-                background: "#070b14",
-                border: "1px solid #243247",
-                borderRadius: 8,
-                color: "#e7edf7"
-              }}
-            >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "22px 0 20px" }}>
+            <label style={{ flex: "2 1 220px", position: "relative" }}>
+              <Search size={17} color="#8492a8" style={{ position: "absolute", left: 12, top: 13 }} />
+              <input aria-label="Search observations" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search observation, station or location..." className="data-input" style={{ paddingLeft: 38 }} />
+            </label>
+            <select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="data-input" style={{ flex: "1 1 170px" }}>
               <option value="All">All statuses</option>
-              <option value="Normal demo reading">Normal demo reading</option>
-              <option value="Review required">Review required</option>
-              <option value="No recent data">No recent data</option>
+              {[...new Set(readings.map((item) => item.status))].map((value) => <option key={value}>{value}</option>)}
             </select>
-
-            <select
-              value={stationFilter}
-              onChange={(event) => setStationFilter(event.target.value)}
-              style={{
-                flex: "1 1 150px",
-                padding: 12,
-                background: "#070b14",
-                border: "1px solid #243247",
-                borderRadius: 8,
-                color: "#e7edf7"
-              }}
-            >
+            <select aria-label="Filter by station" value={stationFilter} onChange={(event) => setStationFilter(event.target.value)} className="data-input" style={{ flex: "1 1 150px" }}>
               <option value="All">All stations</option>
-              <option value="RM-024">RM-024</option>
-              <option value="RM-018">RM-018</option>
-              <option value="RM-031">RM-031</option>
-              <option value="RM-009">RM-009</option>
-              <option value="RM-042">RM-042</option>
+              {stations.map((station) => <option key={station}>{station}</option>)}
             </select>
-
-            <button
-              onClick={exportCSV}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "12px 16px",
-                background: "rgba(57,224,208,0.1)",
-                border: "1px solid rgba(57,224,208,0.3)",
-                borderRadius: 8,
-                color: "#39e0d0",
-                cursor: "pointer"
-              }}
-            >
-              <Download size={16} />
-              Export CSV
-            </button>
           </div>
-
           <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: 720,
-                textAlign: "left"
-              }}
-            >
-              <thead>
-                <tr style={{ color: "#8492a8", fontSize: 12 }}>
-                  {["OBSERVATION", "STATION", "LOCATION", "READING", "TIMESTAMP", "STATUS"].map((heading) => (
-                    <th
-                      key={heading}
-                      style={{
-                        padding: "14px 12px",
-                        borderBottom: "1px solid #243247",
-                        fontWeight: 500
-                      }}
-                    >
-                      {heading}
-                    </th>
-                  ))}
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720, textAlign: "left" }}>
+              <thead><tr style={{ color: "#8492a8", fontSize: 12 }}>{["OBSERVATION", "STATION", "LOCATION", "READING", "TIMESTAMP", "STATUS"].map((heading) => <th key={heading} style={{ padding: 14, borderBottom: "1px solid #243247", fontWeight: 500 }}>{heading}</th>)}</tr></thead>
+              <tbody>{filtered.map((reading) => (
+                <tr key={reading.id} style={{ fontSize: 13 }}>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538", color: "#39e0d0" }}>{reading.id}</td>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>{reading.station}</td>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>{reading.location}</td>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>{reading.value === null ? "Unavailable" : `${reading.value.toFixed(2)} µSv/h`}</td>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538", color: "#8492a8" }}><Clock size={12} style={{ display: "inline", marginRight: 5 }} />{displayTime(reading.time)}</td>
+                  <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>{reading.status}</td>
                 </tr>
-              </thead>
-
-              <tbody>
-                {filteredReadings.map((reading) => (
-                  <tr key={reading.id} style={{ fontSize: 13 }}>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538", color: "#39e0d0" }}>
-                      {reading.id}
-                    </td>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>
-                      {reading.station}
-                    </td>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>
-                      {reading.location}
-                    </td>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>
-                      {reading.value === null ? "Unavailable" : `${reading.value.toFixed(2)} µSv/h`}
-                    </td>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538", color: "#8492a8" }}>
-                      <Clock size={12} style={{ display: "inline", marginRight: 5 }} />
-                      {reading.time}
-                    </td>
-                    <td style={{ padding: 14, borderBottom: "1px solid #192538" }}>
-                      <span
-                        style={{
-                          color:
-                            reading.status === "Review required"
-                              ? "#ffb454"
-                              : reading.status === "No recent data"
-                              ? "#9275ff"
-                              : "#39e0d0",
-                          fontSize: 11
-                        }}
-                      >
-                        ● {reading.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              ))}</tbody>
             </table>
-
-            {filteredReadings.length === 0 && (
-              <p style={{ textAlign: "center", color: "#8492a8", padding: 30 }}>
-                No observations match your search.
-              </p>
-            )}
+            {filtered.length === 0 && <p style={{ textAlign: "center", color: "#8492a8", padding: 30 }}>No observations match your search.</p>}
           </div>
-
-          <p className="panel-description" style={{ marginTop: 18 }}>
-            Showing {filteredReadings.length} of {demoReadings.length} demonstration records.
-          </p>
+          <p className="panel-description" style={{ marginTop: 18 }}>Showing {filtered.length} of {readings.length} backend records.</p>
         </section>
-
-        <p
-          style={{
-            color: "#8492a8",
-            fontSize: 11,
-            marginTop: 18,
-            textAlign: "center"
-          }}
-        >
-          All observations on this page are illustrative demo data, not verified
-          environmental measurements.
-        </p>
+        <p style={{ color: "#8492a8", fontSize: 11, marginTop: 18, textAlign: "center" }}>Seeded demonstration measurements are not verified environmental data.</p>
       </main>
     </div>
   );

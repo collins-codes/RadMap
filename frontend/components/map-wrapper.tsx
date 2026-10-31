@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { Station } from "@/lib/api";
 
 const MonitoringMap = dynamic(
   () => import("./monitoring-map"),
@@ -14,6 +15,6 @@ const MonitoringMap = dynamic(
   }
 );
 
-export default function MapWrapper() {
-  return <MonitoringMap />;
+export default function MapWrapper({ stations }: { stations: Station[] }) {
+  return <MonitoringMap stations={stations} />;
 }
