@@ -2,16 +2,23 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-
-import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_db
-from .models import Anomaly, Evidence, IntegrityCheck, Reading, Station, WorkspaceSettings, utc_now
+from .models import (
+    Anomaly,
+    Evidence,
+    IntegrityCheck,
+    Reading,
+    Station,
+    WorkspaceSettings,
+    utc_now,
+)
 from .schemas import (
     AnalyzeRequest,
     AnomalyReview,

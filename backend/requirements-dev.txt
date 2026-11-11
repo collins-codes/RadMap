@@ -1,2 +1,3 @@
 -r requirements.txt
 ruff>=0.11,<1.0
+#all requirements for development should be added here, but not in requirements.txt
